@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Dragon Rider — Typing Dungeon</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --sky1:#0a1628;--sky2:#1a2d4a;--fire:#ff6b1a;--fire2:#ffaa00;
+  --green:#2ecc71;--red:#e74c3c;--gold:#f1c40f;--ice:#7fdbff;
+  --hp-green:#27ae60;--hp-red:#c0392b;
+}
+html,body{width:100%;height:100%;overflow:hidden;background:#000;}
+body{font-family:'Crimson Pro',serif;display:flex;flex-direction:column;align-items:center;justify-content:center;}
+
+canvas{display:block;}
+
+#ui{
+  position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;
+  display:flex;flex-direction:column;
+}
+
+/* HUD */
+#hud{
+  display:flex;align-items:flex-start;justify-content:space-between;
+  padding:14px 20px;pointer-events:none;
+}
+.hud-box{
+  background:rgba(0,0,0,0.55);border:1px solid rgba(255,200,80,0.3);
+  border-radius:8px;padding:8px 14px;backdrop-filter:blur(4px);
+}
+.hud-label{font-family:'Cinzel',serif;font-size:9px;letter-spacing:3px;color:rgba(255,200,80,0.6);text-transform:uppercase;margin-bottom:3px;}
+.hud-val{font-family:'Cinzel',serif;font-size:18px;font-weight:700;color:#fff;}
+.bar-wrap{width:140px;height:8px;background:rgba(255,255,255,0.1);border-radius:4px;margin-top:4px;overflow:hidden;}
+.bar-fill{height:100%;border-radius:4px;transition:width 0.3s;}
+
+/* WORD / INPUT */
+#word-area{
+  position:absolute;bottom:110px;left:50%;transform:translateX(-50%);
+  text-align:center;pointer-events:none;
+  width:500px;
+}
+#current-word{
+  font-family:'Cinzel',serif;font-size:28px;font-weight:700;
+  color:#fff;letter-spacing:4px;text-shadow:0 0 20px var(--fire2),0 2px 4px rgba(0,0,0,0.8);
+  margin-bottom:8px;min-height:42px;display:block;
+}
+#current-word .typed{color:var(--fire2);}
+#current-word .remaining{color:rgba(255,255,255,0.5);}
+
+#input-wrap{
+  position:absolute;bottom:56px;left:50%;transform:translateX(-50%);
+  width:400px;pointer-events:all;
+}
+#typer{
+  width:100%;background:rgba(0,0,0,0.7);border:2px solid rgba(255,200,80,0.4);
+  border-radius:30px;padding:10px 24px;
+  font-family:'Cinzel',serif;font-size:16px;color:#fff;outline:none;
+  text-align:center;letter-spacing:3px;
+  transition:border-color 0.2s;
+}
+#typer:focus{border-color:rgba(255,200,80,0.8);}
+#typer.shake{animation:shake 0.3s ease;}
+@keyframes shake{0%,100%{transform:translateX(0);}25%{transform:translateX(-6px);}75%{transform:translateX(6px);};}
+#typer.correct{border-color:#2ecc71;animation:flash 0.3s ease;}
+@keyframes flash{0%,100%{box-shadow:none;}50%{box-shadow:0 0 20px rgba(46,204,113,0.6);}}
+
+/* COMBO */
+#combo{
+  position:absolute;top:50%;right:20px;transform:translateY(-50%);
+  font-family:'Cinzel',serif;font-size:13px;color:var(--gold);
+  background:rgba(0,0,0,0.55);border:1px solid rgba(255,200,80,0.3);
+  border-radius:8px;padding:8px 14px;text-align:center;
+  opacity:0;transition:opacity 0.3s;pointer-events:none;
+}
+#combo.visible{opacity:1;}
+#combo-num{font-size:32px;font-weight:900;display:block;line-height:1;}
+#combo-label{font-size:9px;letter-spacing:3px;color:rgba(255,200,80,0.6);}
+
+/* SCREENS */
+.screen{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  background:linear-gradient(180deg,#0a1628 0%,#1a0a2e 100%);
+  font-family:'Cinzel',serif;pointer-events:all;
+}
+.screen.hidden{display:none;}
+.screen h1{font-size:clamp(2.5rem,6vw,5rem);font-weight:900;color:var(--gold);letter-spacing:8px;text-shadow:0 0 40px rgba(255,170,0,0.5);margin-bottom:0.5rem;}
+.screen h2{font-size:1.3rem;font-weight:400;color:rgba(255,200,80,0.6);letter-spacing:4px;margin-bottom:2.5rem;}
+.screen p{font-family:'Crimson Pro',serif;font-size:1.1rem;color:rgba(255,255,255,0.6);max-width:420px;text-align:center;line-height:1.7;margin-bottom:2rem;}
+.btn{
+  font-family:'Cinzel',serif;font-size:14px;font-weight:700;letter-spacing:3px;
+  padding:14px 40px;border:2px solid var(--gold);background:transparent;
+  color:var(--gold);cursor:pointer;border-radius:4px;transition:all 0.2s;
+  text-transform:uppercase;margin:6px;
+}
+.btn:hover{background:var(--gold);color:#0a1628;}
+.level-badge{
+  font-size:0.85rem;letter-spacing:2px;color:rgba(255,200,80,0.5);
+  margin-bottom:0.5rem;
+}
+
+/* LEVEL TITLE */
+#level-announce{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;pointer-events:none;
+  opacity:0;transition:opacity 0.5s;
+}
+#level-announce.show{opacity:1;}
+#level-announce h2{font-family:'Cinzel',serif;font-size:3rem;font-weight:900;color:var(--gold);letter-spacing:6px;text-shadow:0 0 40px rgba(255,170,0,0.7);}
+#level-announce p{font-family:'Crimson Pro',serif;font-size:1.2rem;color:rgba(255,255,255,0.7);letter-spacing:2px;margin-top:0.5rem;}
+
+/* WPM */
+#wpm-badge{
+  position:absolute;bottom:56px;right:20px;
+  font-family:'Cinzel',serif;font-size:11px;
+  color:rgba(255,200,80,0.5);text-align:center;pointer-events:none;
+}
+#wpm-val{font-size:22px;color:var(--gold);display:block;}
+
+#msg{
+  position:absolute;top:30%;left:50%;transform:translateX(-50%);
+  font-family:'Cinzel',serif;font-size:20px;font-weight:700;
+  color:#fff;text-shadow:0 0 20px var(--fire2);pointer-events:none;
+  opacity:0;white-space:nowrap;
+}
+</style>
+</head>
+<body>
+
+<!-- CANVAS -->
+<canvas id="c"></canvas>
+
+<!-- HUD overlay -->
+<div id="ui">
+  <div id="hud">
+    <div class="hud-box">
+      <div class="hud-label">Dragon HP</div>
+      <div class="bar-wrap"><div class="bar-fill" id="player-hp-bar" style="background:var(--hp-green);width:100%;"></div></div>
+      <div class="hud-val" id="player-hp-val">100</div>
+    </div>
+    <div class="hud-box" style="text-align:center;">
+      <div class="hud-label">Level</div>
+      <div class="hud-val" id="level-val">1</div>
+      <div style="font-size:10px;color:rgba(255,200,80,0.5);margin-top:2px;" id="level-name-hud">The Awakening</div>
+    </div>
+    <div class="hud-box" style="text-align:center;">
+      <div class="hud-label">Score</div>
+      <div class="hud-val" id="score-val">0</div>
+    </div>
+    <div class="hud-box">
+      <div class="hud-label">Enemy HP</div>
+      <div class="bar-fill" id="enemy-hp-bar" style="background:var(--hp-red);width:100%;height:8px;border-radius:4px;transition:width 0.3s;"></div>
+      <div class="hud-val" id="enemy-hp-val">—</div>
+    </div>
+  </div>
+
+  <div id="word-area">
+    <span id="current-word"></span>
+  </div>
+
+  <div id="combo" class="">
+    <span id="combo-num">0</span>
+    <span id="combo-label">COMBO</span>
+  </div>
+
+  <div id="wpm-badge">
+    <span id="wpm-val">—</span>
+    WPM
+  </div>
+
+  <div id="level-announce">
+    <h2 id="la-title">LEVEL 1</h2>
+    <p id="la-sub">The Awakening</p>
+  </div>
+
+  <div id="msg"></div>
+</div>
+
+<div id="input-wrap">
+  <input id="typer" type="text" autocomplete="off" autocorrect="off" spellcheck="false" placeholder="Type to attack..."/>
+</div>
+
+<!-- SCREENS -->
+<div class="screen" id="start-screen">
+  <div class="level-badge">⚔ TYPING DUNGEON ⚔</div>
+  <h1>DRAGON<br>RIDER</h1>
+  <h2>How to Train Your Keyboard</h2>
+  <p>Type the words shown to unleash dragon fire. Type faster for more damage. Build combos for devastating attacks. Survive all 5 levels!</p>
+  <button class="btn" onclick="startGame()">Begin Your Legend</button>
+</div>
+
+<div class="screen hidden" id="levelup-screen">
+  <div class="level-badge" id="lu-badge">LEVEL COMPLETE</div>
+  <h1 id="lu-title">ONWARDS!</h1>
+  <p id="lu-stats"></p>
+  <button class="btn" id="lu-btn" onclick="nextLevel()">Continue →</button>
+</div>
+
+<div class="screen hidden" id="gameover-screen">
+  <h1>FALLEN</h1>
+  <h2>Your dragon rests...</h2>
+  <p id="go-stats"></p>
+  <button class="btn" onclick="startGame()">Rise Again</button>
+</div>
+
+<div class="screen hidden" id="victory-screen">
+  <h1>LEGEND!</h1>
+  <h2>Berk is saved!</h2>
+  <p id="vic-stats"></p>
+  <button class="btn" onclick="startGame()">Ride Again</button>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize(){
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+resize();
+window.addEventListener('resize', resize);
+
+// ── LEVELS ──────────────────────────────────────────
+const LEVELS = [
+  { id:1, name:'The Awakening',   dragon:'toothless', enemy:'gronckle',   enemyHp:200, enemyColor:'#7a4f7a', bgTop:'#0a1628', bgBot:'#1a2d4a', wordCount:8,  wordLen:[3,5], enemyDmg:5  },
+  { id:2, name:'Stormy Skies',    dragon:'toothless', enemy:'nadder',     enemyHp:350, enemyColor:'#2e7a4f', bgTop:'#0d1a2e', bgBot:'#1a3040', wordCount:10, wordLen:[4,6], enemyDmg:8  },
+  { id:3, name:'The Nightmare',   dragon:'toothless', enemy:'nightmare',  enemyHp:500, enemyColor:'#7a2e1a', bgTop:'#1a0a0a', bgBot:'#2e1a0a', wordCount:12, wordLen:[5,7], enemyDmg:12 },
+  { id:4, name:'Ice and Fire',    dragon:'toothless', enemy:'bewilderbeast',enemyHp:700,enemyColor:'#1a4a7a',bgTop:'#060f1f',bgBot:'#0a2040', wordCount:14, wordLen:[5,8], enemyDmg:15 },
+  { id:5, name:'King of Dragons', dragon:'toothless', enemy:'alphadragon',enemyHp:1000,enemyColor:'#4a1a7a',bgTop:'#060608', bgBot:'#0a0a20', wordCount:16, wordLen:[6,9], enemyDmg:20 },
+];
+
+const WORD_POOLS = {
+  short: ['fly','fire','night','sky','wing','roar','claw','brave','swift','sharp','soar','blaze','rage','void'],
+  mid:   ['dragon','rider','thunder','berserk','viking','attack','defend','shield','inferno','combat','strike','charge','mighty','battle','fierce','savage'],
+  long:  ['toothless','nightfury','berserk','nightmare','bewildered','alphadragon','fireblast','thunderstrike','vikingrage','dragonrider','darkscales','stoneclaw','bloodbane','skullcrusher','stormheart','thornfire'],
+  epic:  ['nightfuryrage','berserkviking','dragonslayer','thunderblast','infernoknight','alphadragon','bewilderbeast','stormbreaker'],
+};
+
+function getWords(minL, maxL, count) {
+  const pool = [...WORD_POOLS.short, ...WORD_POOLS.mid, ...WORD_POOLS.long, ...WORD_POOLS.epic]
+    .filter(w => w.length >= minL && w.length <= maxL);
+  const shuffled = pool.sort(() => Math.random()-0.5);
+  const words = [];
+  while(words.length < count) words.push(...shuffled);
+  return words.slice(0, count).map(w => w.toUpperCase());
+}
+
+// ── STATE ────────────────────────────────────────────
+let gameState = 'start'; // start | playing | levelup | gameover | victory
+let level, levelData, words, wordIdx, currentWord, typedSoFar;
+let playerHp, enemyHp;
+let score, combo, maxCombo;
+let wordStartTime, wordTimes;
+let particles = [], explosions = [], fireBlasts = [], damageNums = [];
+let animFrame;
+let enemyAnim = 0, dragonAnim = 0;
+let enemyShake = 0, playerShake = 0;
+let bgStars = [];
+let clouds = [];
+
+// ── INIT ─────────────────────────────────────────────
+function initStars() {
+  bgStars = [];
+  for(let i=0;i<120;i++) bgStars.push({x:Math.random()*2000,y:Math.random()*600,r:Math.random()*1.5+0.3,b:Math.random()});
+}
+function initClouds() {
+  clouds = [];
+  for(let i=0;i<6;i++) clouds.push({x:Math.random()*W,y:60+Math.random()*120,w:80+Math.random()*120,speed:0.2+Math.random()*0.4,alpha:0.04+Math.random()*0.06});
+}
+initStars(); initClouds();
+
+function startGame() {
+  hideAllScreens();
+  level = 1;
+  score = 0;
+  playerHp = 100;
+  maxCombo = 0;
+  wordTimes = [];
+  loadLevel();
+  gameState = 'playing';
+  document.getElementById('typer').focus();
+  loop();
+}
+
+function loadLevel() {
+  levelData = LEVELS[level-1];
+  words = getWords(levelData.wordLen[0], levelData.wordLen[1], levelData.wordCount);
+  wordIdx = 0; combo = 0; enemyHp = levelData.enemyHp;
+  currentWord = words[0]; typedSoFar = '';
+  updateHUD();
+  showLevelAnnounce();
+  document.getElementById('typer').value = '';
+}
+
+function showLevelAnnounce() {
+  const la = document.getElementById('level-announce');
+  document.getElementById('la-title').textContent = 'LEVEL ' + level;
+  document.getElementById('la-sub').textContent = levelData.name;
+  la.classList.add('show');
+  setTimeout(() => la.classList.remove('show'), 2200);
+}
+
+// ── INPUT ─────────────────────────────────────────────
+const typer = document.getElementById('typer');
+typer.addEventListener('input', e => {
+  if(gameState !== 'playing') return;
+  const val = e.target.value.trim().toUpperCase();
+  typedSoFar = val;
+
+  if(val === currentWord) {
+    onWordComplete();
+  } else if(currentWord.startsWith(val)) {
+    // correct so far
+  } else {
+    // wrong
+    typer.classList.remove('shake');
+    void typer.offsetWidth;
+    typer.classList.add('shake');
+    typer.value = '';
+    typedSoFar = '';
+    combo = 0; updateCombo();
+  }
+  updateWordDisplay();
+});
+
+typer.addEventListener('keydown', e => {
+  if(gameState !== 'playing') return;
+  if(e.key === 'Enter') {
+    typer.value = '';
+    typedSoFar = '';
+    updateWordDisplay();
+  }
+});
+
+function onWordComplete() {
+  // Calculate speed
+  const now = Date.now();
+  const elapsed = wordStartTime ? (now - wordStartTime)/1000 : 1;
+  const wpm = Math.round((currentWord.length/5) / (elapsed/60));
+  wordTimes.push(wpm);
+
+  // Damage: base + speed bonus + combo multiplier
+  const base = currentWord.length * 8;
+  const speedBonus = Math.min(wpm, 200);
+  combo++;
+  maxCombo = Math.max(maxCombo, combo);
+  const comboMult = 1 + Math.floor(combo/3)*0.25;
+  const dmg = Math.round((base + speedBonus) * comboMult);
+  
+  enemyHp = Math.max(0, enemyHp - dmg);
+  score += dmg * combo;
+
+  // Fire blast
+  fireBlasts.push({x: W*0.25, y: H*0.55, tx: W*0.72, ty: H*0.48, prog:0, speed:0.04+Math.min(wpm,200)/4000, dmg});
+  
+  // Flash
+  typer.classList.remove('correct');
+  void typer.offsetWidth;
+  typer.classList.add('correct');
+
+  updateCombo();
+  updateHUD();
+
+  // Next word
+  wordIdx++;
+  if(wordIdx >= words.length) {
+    if(enemyHp > 0) {
+      // All words used, add more
+      words = [...words, ...getWords(levelData.wordLen[0], levelData.wordLen[1], levelData.wordCount)];
+    }
+  }
+
+  if(enemyHp <= 0) {
+    setTimeout(onLevelComplete, 800);
+  } else {
+    currentWord = words[wordIdx % words.length];
+    typedSoFar = '';
+    wordStartTime = Date.now();
+  }
+
+  typer.value = '';
+  updateWordDisplay();
+}
+
+// ── HUD ───────────────────────────────────────────────
+function updateHUD() {
+  document.getElementById('player-hp-val').textContent = Math.max(0, Math.round(playerHp));
+  document.getElementById('player-hp-bar').style.width = Math.max(0, playerHp) + '%';
+  document.getElementById('player-hp-bar').style.background = playerHp > 50 ? 'var(--hp-green)' : playerHp > 25 ? '#e67e22' : 'var(--hp-red)';
+  document.getElementById('enemy-hp-val').textContent = Math.max(0, Math.round(enemyHp));
+  const pct = (enemyHp / levelData.enemyHp * 100);
+  document.getElementById('enemy-hp-bar').style.width = pct + '%';
+  document.getElementById('score-val').textContent = score.toLocaleString();
+  document.getElementById('level-val').textContent = level;
+  document.getElementById('level-name-hud').textContent = levelData.name;
+
+  const avgWpm = wordTimes.length ? Math.round(wordTimes.reduce((a,b)=>a+b,0)/wordTimes.length) : 0;
+  if(avgWpm) { document.getElementById('wpm-val').textContent = avgWpm; }
+}
+
+function updateCombo() {
+  const el = document.getElementById('combo');
+  document.getElementById('combo-num').textContent = combo;
+  if(combo >= 2) { el.classList.add('visible'); } else { el.classList.remove('visible'); }
+}
+
+function updateWordDisplay() {
+  const el = document.getElementById('current-word');
+  if(!currentWord) { el.textContent=''; return; }
+  const typed = typedSoFar || '';
+  const t = document.createElement('span'); t.className='typed'; t.textContent=typed;
+  const r = document.createElement('span'); r.className='remaining'; r.textContent=currentWord.slice(typed.length);
+  el.innerHTML = '';
+  el.appendChild(t); el.appendChild(r);
+}
+
+// ── PARTICLES ─────────────────────────────────────────
+function spawnExplosion(x, y, color, count=20) {
+  for(let i=0;i<count;i++) {
+    const ang = Math.random()*Math.PI*2;
+    const spd = 2+Math.random()*6;
+    particles.push({x,y,vx:Math.cos(ang)*spd,vy:Math.sin(ang)*spd,life:1,decay:0.02+Math.random()*0.03,r:2+Math.random()*4,color});
+  }
+}
+
+function spawnDamageNum(x, y, dmg, combo) {
+  const mult = combo >= 3 ? '🔥 ' : '';
+  damageNums.push({x, y, val: '-'+dmg, vy:-2.5, life:1, decay:0.018, big: combo>=3});
+}
+
+// ── ENEMY ATTACK ─────────────────────────────────────
+let enemyAttackTimer = 0;
+let enemyAttackInterval = 180; // frames
+
+function triggerEnemyAttack() {
+  playerHp = Math.max(0, playerHp - levelData.enemyDmg);
+  playerShake = 12;
+  spawnExplosion(W*0.22, H*0.55, '#e74c3c', 15);
+  showMsg('OUCH! -'+levelData.enemyDmg, '#e74c3c');
+  updateHUD();
+  if(playerHp <= 0) onGameOver();
+}
+
+// ── LEVEL COMPLETE / GAME OVER / VICTORY ──────────────
+function onLevelComplete() {
+  gameState = 'levelup';
+  const avgWpm = wordTimes.length ? Math.round(wordTimes.reduce((a,b)=>a+b,0)/wordTimes.length) : 0;
+  spawnExplosion(W*0.72, H*0.48, '#f1c40f', 50);
+  spawnExplosion(W*0.5, H*0.4, '#ff6b1a', 40);
+  if(level >= 5) { showVictory(avgWpm); return; }
+  const lu = document.getElementById('levelup-screen');
+  document.getElementById('lu-badge').textContent = '— LEVEL '+level+' COMPLETE —';
+  document.getElementById('lu-title').textContent = levelData.name.toUpperCase();
+  document.getElementById('lu-stats').textContent = `Score: ${score.toLocaleString()} · Avg WPM: ${avgWpm} · Max Combo: ×${maxCombo}`;
+  document.getElementById('lu-btn').textContent = 'Level '+(level+1)+': '+LEVELS[level].name+' →';
+  lu.classList.remove('hidden');
+}
+
+function nextLevel() {
+  document.getElementById('levelup-screen').classList.add('hidden');
+  level++;
+  loadLevel();
+  gameState = 'playing';
+  document.getElementById('typer').focus();
+}
+
+function onGameOver() {
+  gameState = 'gameover';
+  const avgWpm = wordTimes.length ? Math.round(wordTimes.reduce((a,b)=>a+b,0)/wordTimes.length) : 0;
+  document.getElementById('go-stats').textContent = `Reached Level ${level} · Score: ${score.toLocaleString()} · Avg WPM: ${avgWpm}`;
+  document.getElementById('gameover-screen').classList.remove('hidden');
+}
+
+function showVictory(avgWpm) {
+  document.getElementById('vic-stats').textContent = `Final Score: ${score.toLocaleString()} · Avg WPM: ${avgWpm} · Max Combo: ×${maxCombo}`;
+  document.getElementById('victory-screen').classList.remove('hidden');
+}
+
+function hideAllScreens() {
+  ['start-screen','levelup-screen','gameover-screen','victory-screen'].forEach(id=>{
+    document.getElementById(id).classList.add('hidden');
+  });
+}
+
+// ── SHOW MESSAGE ──────────────────────────────────────
+function showMsg(text, color='#fff') {
+  const el = document.getElementById('msg');
+  el.textContent = text; el.style.color = color;
+  el.style.opacity = 1;
+  clearTimeout(el._t);
+  el._t = setTimeout(()=>{ el.style.opacity=0; }, 900);
+}
+
+// ── DRAW ─────────────────────────────────────────────
+let tick = 0;
+
+function drawBg() {
+  const ld = levelData || LEVELS[0];
+  const grad = ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0, ld.bgTop);
+  grad.addColorStop(1, ld.bgBot);
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,W,H);
+
+  // Stars
+  const t = tick*0.0003;
+  ctx.save();
+  bgStars.forEach(s=>{
+    const b = 0.3+0.7*Math.abs(Math.sin(t*2+s.b*10));
+    ctx.globalAlpha = b*0.7;
+    ctx.fillStyle='#fff';
+    ctx.beginPath();
+    ctx.arc((s.x+tick*0.05)%W, s.y, s.r, 0, Math.PI*2);
+    ctx.fill();
+  });
+  ctx.restore();
+
+  // Clouds
+  clouds.forEach(cl=>{
+    cl.x = (cl.x + cl.speed) % (W+200);
+    ctx.save(); ctx.globalAlpha=cl.alpha;
+    ctx.fillStyle='#fff';
+    ctx.beginPath();
+    ctx.ellipse(cl.x, cl.y, cl.w, cl.w*0.45, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.restore();
+  });
+
+  // Ground/fog
+  const fog = ctx.createLinearGradient(0, H*0.7, 0, H);
+  fog.addColorStop(0,'rgba(0,0,0,0)');
+  fog.addColorStop(1,ld.bgTop+'dd');
+  ctx.fillStyle=fog; ctx.fillRect(0,H*0.7,W,H*0.3);
+}
+
+function drawDragon(x, y, flap) {
+  const s = 1; // scale
+  ctx.save();
+  ctx.translate(x + (playerShake>0?Math.sin(playerShake)*4:0), y + Math.sin(flap*0.06)*8);
+
+  // body
+  ctx.fillStyle='#1a1a2e';
+  ctx.beginPath();
+  ctx.ellipse(0,0,52,28,0,0,Math.PI*2);
+  ctx.fill();
+
+  // wing left (back)
+  const wf = Math.sin(flap*0.06)*0.4;
+  ctx.save(); ctx.rotate(wf-0.2);
+  ctx.fillStyle='rgba(20,20,60,0.7)';
+  ctx.beginPath();
+  ctx.moveTo(-10,-10);
+  ctx.bezierCurveTo(-50,-60,-90,-40,-80,0);
+  ctx.bezierCurveTo(-60,20,-30,10,-10,10);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  // wing right
+  ctx.save(); ctx.rotate(-wf+0.2); ctx.scale(1,-1);
+  ctx.fillStyle='rgba(20,20,60,0.7)';
+  ctx.beginPath();
+  ctx.moveTo(-10,-10);
+  ctx.bezierCurveTo(-50,-60,-90,-40,-80,0);
+  ctx.bezierCurveTo(-60,20,-30,10,-10,10);
+  ctx.closePath(); ctx.fill();
+  ctx.restore();
+
+  // main body
+  ctx.fillStyle='#12122a';
+  ctx.beginPath();
+  ctx.ellipse(0,0,52,26,0,0,Math.PI*2);
+  ctx.fill();
+
+  // head
+  ctx.fillStyle='#0e0e22';
+  ctx.beginPath();
+  ctx.ellipse(50,0,22,16,0.3,0,Math.PI*2);
+  ctx.fill();
+
+  // eye
+  ctx.fillStyle='#00d4ff';
+  ctx.beginPath();
+  ctx.arc(60,-4,5,0,Math.PI*2);
+  ctx.fill();
+  ctx.fillStyle='#004466';
+  ctx.beginPath();
+  ctx.arc(61,-4,2.5,0,Math.PI*2);
+  ctx.fill();
+
+  // tail
+  ctx.strokeStyle='#0e0e22'; ctx.lineWidth=12; ctx.lineCap='round';
+  ctx.beginPath();
+  ctx.moveTo(-52,0);
+  ctx.bezierCurveTo(-80,20,-90,30,-100,10);
+  ctx.stroke();
+
+  // tail fin
+  ctx.fillStyle='#0e0e22';
+  ctx.beginPath();
+  ctx.moveTo(-100,10);
+  ctx.lineTo(-115,-5);
+  ctx.lineTo(-110,20);
+  ctx.closePath(); ctx.fill();
+
+  // ear fin things
+  ctx.fillStyle='#0e0e22';
+  ctx.beginPath();
+  ctx.moveTo(42,-14); ctx.lineTo(38,-30); ctx.lineTo(52,-16); ctx.closePath(); ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(50,-14); ctx.lineTo(48,-28); ctx.lineTo(60,-14); ctx.closePath(); ctx.fill();
+
+  ctx.restore();
+  if(playerShake>0) playerShake--;
+}
+
+function drawEnemy(x, y, type, color, healthPct) {
+  const shake = enemyShake>0 ? Math.sin(enemyShake*1.5)*6 : 0;
+  ctx.save();
+  ctx.translate(x + shake, y + Math.sin(enemyAnim*0.04)*6);
+
+  const types = {
+    gronckle:    ()=>drawGronckle(color, healthPct),
+    nadder:      ()=>drawNadder(color, healthPct),
+    nightmare:   ()=>drawNightmare(color, healthPct),
+    bewilderbeast:()=>drawBewilderbeast(color, healthPct),
+    alphadragon: ()=>drawAlphaDragon(color, healthPct),
+  };
+  (types[type]||types.gronckle)();
+
+  ctx.restore();
+  if(enemyShake>0) enemyShake--;
+}
+
+function drawGronckle(col, hp) {
+  ctx.fillStyle=col;
+  ctx.beginPath(); ctx.ellipse(0,0,50,40,0,0,Math.PI*2); ctx.fill();
+  // spikes
+  for(let i=0;i<6;i++){
+    const a=(i/6)*Math.PI*2;
+    ctx.save(); ctx.rotate(a);
+    ctx.fillStyle='#4a3050';
+    ctx.beginPath(); ctx.moveTo(0,0); ctx.lineTo(6,-55); ctx.lineTo(-6,-55); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  // eyes
+  drawEyes(col, hp);
+  // mouth
+  ctx.strokeStyle='#333'; ctx.lineWidth=3; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(-20,20); ctx.quadraticCurveTo(0,30,20,20); ctx.stroke();
+}
+
+function drawNadder(col, hp) {
+  ctx.fillStyle=col;
+  ctx.beginPath(); ctx.ellipse(0,0,38,55,0.2,0,Math.PI*2); ctx.fill();
+  // neck
+  ctx.strokeStyle=col; ctx.lineWidth=20;
+  ctx.beginPath(); ctx.moveTo(-10,-55); ctx.bezierCurveTo(-20,-80,-10,-95,5,-100); ctx.stroke();
+  // head
+  ctx.fillStyle=col;
+  ctx.beginPath(); ctx.ellipse(5,-108,20,14,0.4,0,Math.PI*2); ctx.fill();
+  // tail spike
+  ctx.fillStyle='#1a5a30';
+  ctx.beginPath(); ctx.moveTo(10,55); ctx.lineTo(40,80); ctx.lineTo(0,90); ctx.closePath(); ctx.fill();
+  drawEyes(col, hp);
+}
+
+function drawNightmare(col, hp) {
+  ctx.fillStyle=col;
+  ctx.beginPath(); ctx.ellipse(0,0,60,35,0,0,Math.PI*2); ctx.fill();
+  // flame body overlay
+  ctx.fillStyle='rgba(255,100,0,0.2)';
+  ctx.beginPath(); ctx.ellipse(0,0,60,35,0,0,Math.PI*2); ctx.fill();
+  // wings
+  ctx.fillStyle='#5a1a0a';
+  ctx.beginPath(); ctx.moveTo(-10,0); ctx.bezierCurveTo(-60,-60,-100,-30,-90,10); ctx.bezierCurveTo(-70,40,-30,20,-10,20); ctx.closePath(); ctx.fill();
+  ctx.save(); ctx.scale(-1,1);
+  ctx.beginPath(); ctx.moveTo(-10,0); ctx.bezierCurveTo(-60,-60,-100,-30,-90,10); ctx.bezierCurveTo(-70,40,-30,20,-10,20); ctx.closePath(); ctx.fill();
+  ctx.restore();
+  // horn
+  ctx.fillStyle='#3a1a0a';
+  ctx.beginPath(); ctx.moveTo(0,-35); ctx.lineTo(8,-75); ctx.lineTo(-8,-75); ctx.closePath(); ctx.fill();
+  drawEyes(col, hp);
+}
+
+function drawBewilderbeast(col, hp) {
+  ctx.fillStyle=col;
+  ctx.beginPath(); ctx.ellipse(0,0,75,50,0,0,Math.PI*2); ctx.fill();
+  // ice spikes
+  ctx.fillStyle='#a0d8ef';
+  for(let i=0;i<8;i++){
+    ctx.save(); ctx.rotate((i/8)*Math.PI*2);
+    ctx.beginPath(); ctx.moveTo(0,-50); ctx.lineTo(8,-80); ctx.lineTo(-8,-80); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  ctx.fillStyle='#7fdbff';
+  ctx.globalAlpha=0.3;
+  ctx.beginPath(); ctx.ellipse(0,0,75,50,0,0,Math.PI*2); ctx.fill();
+  ctx.globalAlpha=1;
+  drawEyes(col, hp);
+}
+
+function drawAlphaDragon(col, hp) {
+  ctx.fillStyle=col;
+  ctx.beginPath(); ctx.ellipse(0,0,85,55,0,0,Math.PI*2); ctx.fill();
+  // cosmic overlay
+  ctx.fillStyle='rgba(100,0,255,0.15)';
+  ctx.beginPath(); ctx.ellipse(0,0,85,55,0,0,Math.PI*2); ctx.fill();
+  // multiple horns
+  for(let i=-2;i<=2;i++){
+    ctx.fillStyle='#2a0a4a';
+    ctx.save(); ctx.rotate(i*0.25);
+    ctx.beginPath(); ctx.moveTo(0,-55); ctx.lineTo(7,-95); ctx.lineTo(-7,-95); ctx.closePath(); ctx.fill();
+    ctx.restore();
+  }
+  // glow
+  const grd=ctx.createRadialGradient(0,0,20,0,0,90);
+  grd.addColorStop(0,'rgba(150,0,255,0.3)'); grd.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=grd; ctx.beginPath(); ctx.ellipse(0,0,90,60,0,0,Math.PI*2); ctx.fill();
+  drawEyes(col, hp);
+}
+
+function drawEyes(col, hp) {
+  const eyeCol = hp < 0.3 ? '#ff0000' : '#ffcc00';
+  ctx.fillStyle=eyeCol;
+  ctx.beginPath(); ctx.arc(-18,-12,6,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(18,-12,6,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#000';
+  ctx.beginPath(); ctx.arc(-17,-12,2.5,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(19,-12,2.5,0,Math.PI*2); ctx.fill();
+}
+
+function drawFireBlasts() {
+  fireBlasts = fireBlasts.filter(f => f.prog < 1);
+  fireBlasts.forEach(f => {
+    f.prog = Math.min(1, f.prog + f.speed);
+    const cx = f.x + (f.tx - f.x)*f.prog;
+    const cy = f.y + (f.ty - f.y)*f.prog - Math.sin(f.prog*Math.PI)*60;
+    const r = 8 + (1-Math.abs(f.prog-0.5)*2)*12;
+    const grd = ctx.createRadialGradient(cx,cy,0,cx,cy,r*2);
+    grd.addColorStop(0,'rgba(255,220,80,0.9)');
+    grd.addColorStop(0.4,'rgba(255,100,20,0.7)');
+    grd.addColorStop(1,'rgba(255,50,0,0)');
+    ctx.save(); ctx.globalAlpha = 0.9;
+    ctx.fillStyle=grd;
+    ctx.beginPath(); ctx.arc(cx,cy,r*2,0,Math.PI*2); ctx.fill();
+    ctx.globalAlpha=1;
+    ctx.fillStyle='#ffe080'; ctx.beginPath(); ctx.arc(cx,cy,r*0.4,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+    // Spawn hit on arrival
+    if(f.prog >= 1) {
+      spawnExplosion(f.tx, f.ty, '#ff8c00', 18);
+      spawnDamageNum(f.tx, f.ty-40, f.dmg, combo);
+      enemyShake = 10;
+    }
+  });
+}
+
+function drawParticles() {
+  particles = particles.filter(p => p.life > 0);
+  particles.forEach(p => {
+    p.x+=p.vx; p.y+=p.vy; p.vy+=0.15; p.life-=p.decay;
+    ctx.save(); ctx.globalAlpha=p.life;
+    ctx.fillStyle=p.color;
+    ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  });
+}
+
+function drawDamageNums() {
+  damageNums = damageNums.filter(d => d.life > 0);
+  damageNums.forEach(d => {
+    d.y+=d.vy; d.life-=d.decay;
+    ctx.save(); ctx.globalAlpha=d.life;
+    ctx.font = d.big ? 'bold 26px Cinzel,serif' : 'bold 18px Cinzel,serif';
+    ctx.fillStyle = d.big ? '#ff8c00' : '#fff';
+    ctx.strokeStyle='rgba(0,0,0,0.5)'; ctx.lineWidth=3;
+    ctx.strokeText(d.val, d.x, d.y);
+    ctx.fillText(d.val, d.x, d.y);
+    ctx.restore();
+  });
+}
+
+// ── MAIN LOOP ─────────────────────────────────────────
+function loop() {
+  tick++;
+  enemyAnim++; dragonAnim++;
+
+  ctx.clearRect(0,0,W,H);
+  drawBg();
+
+  if(gameState === 'playing' || gameState === 'levelup') {
+    const ld = levelData || LEVELS[0];
+    // Enemy position
+    const ex = W*0.72, ey = H*0.47;
+    const px = W*0.22, py = H*0.55;
+
+    // Enemy attack timer
+    if(gameState==='playing') {
+      enemyAttackTimer++;
+      const interval = Math.max(90, 200 - level*20);
+      if(enemyAttackTimer >= interval) {
+        enemyAttackTimer=0;
+        if(playerHp>0 && enemyHp>0) triggerEnemyAttack();
+      }
+    }
+
+    drawEnemy(ex, ey, ld.enemy, ld.enemyColor, enemyHp/ld.enemyHp);
+    drawFireBlasts();
+    drawDragon(px, py, dragonAnim);
+    drawParticles();
+    drawDamageNums();
+  }
+
+  animFrame = requestAnimationFrame(loop);
+}
+
+// Focus typer on click
+canvas.addEventListener('click', ()=>{ if(gameState==='playing') typer.focus(); });
+
+// Start stars pre-emptively drawn even on start screen
+function startLoop() {
+  tick++;
+  ctx.clearRect(0,0,W,H);
+  const grad=ctx.createLinearGradient(0,0,0,H);
+  grad.addColorStop(0,'#0a1628'); grad.addColorStop(1,'#1a0a2e');
+  ctx.fillStyle=grad; ctx.fillRect(0,0,W,H);
+  bgStars.forEach(s=>{
+    const b=0.3+0.7*Math.abs(Math.sin(tick*0.0006+s.b*10));
+    ctx.globalAlpha=b*0.6; ctx.fillStyle='#fff';
+    ctx.beginPath(); ctx.arc((s.x+tick*0.04)%W,s.y,s.r,0,Math.PI*2); ctx.fill();
+  });
+  ctx.globalAlpha=1;
+  drawParticles(); drawDamageNums();
+  animFrame=requestAnimationFrame(startLoop);
+}
+
+wordStartTime = Date.now();
+startLoop();
+</script>
+</body>
+</html>
