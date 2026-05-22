@@ -11,4 +11,3 @@ print("Right wing")
 print("Gandha")
 print("goru")
 
-    
