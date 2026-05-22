@@ -3,6 +3,6 @@ print("ASh")
 print("Wa")
 print("Right wing")
 print("Gandha")
-print("goru")
+print("gorua")
 
     
