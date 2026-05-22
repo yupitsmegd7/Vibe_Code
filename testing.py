@@ -5,3 +5,4 @@ if i=="yes":
     print("Nihialist bruh")
 else:
     print("good boy")
+    
