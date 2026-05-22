@@ -1,0 +1,464 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:#0d1117;color:#e6edf3;font-family:system-ui,sans-serif;overflow:hidden;}
+#wrap{position:relative;width:100%;height:620px;overflow:hidden;}
+canvas{display:block;width:100%;height:100%;}
+
+.popup{position:absolute;background:#161b22;border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:14px;z-index:30;display:none;min-width:220px;max-width:300px;}
+.popup.open{display:block;}
+.popup-title{font-size:10px;letter-spacing:2px;color:#8b949e;text-transform:uppercase;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;}
+.popup-title button{background:none;border:none;color:#8b949e;cursor:pointer;font-size:14px;padding:0;}
+.mood-grid{display:grid;grid-template-columns:1fr 1fr;gap:5px;}
+.mb{padding:5px 8px;border-radius:7px;border:1.5px solid transparent;cursor:pointer;font-size:11px;background:#21262d;color:#8b949e;display:flex;align-items:center;gap:5px;transition:all 0.12s;}
+.mb.on{border-color:currentColor;color:#fff;background:#161b22;}
+.mb:hover{background:#21262d;color:#e6edf3;}
+.bar-bg{height:5px;background:rgba(255,255,255,0.07);border-radius:3px;overflow:hidden;margin:2px 0;}
+.bar-fill{height:100%;border-radius:3px;transition:width 0.5s;}
+.seg-row{display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid rgba(255,255,255,0.05);font-size:11px;}
+.gp{padding:5px 11px;border-radius:16px;border:1px solid rgba(255,255,255,0.1);cursor:pointer;font-size:11px;background:#21262d;color:#8b949e;transition:all 0.12s;white-space:nowrap;flex-shrink:0;}
+.gp:hover{background:#161b22;color:#e6edf3;}
+.gp.on{background:#ffe066;border-color:#d4ac0d;color:#3a2500;font-weight:600;}
+input[type=range]{width:100%;accent-color:#ffd700;}
+
+#toolbar{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);display:flex;gap:8px;z-index:25;background:rgba(22,27,34,0.92);border:1px solid rgba(255,255,255,0.1);border-radius:40px;padding:8px 16px;}
+.tb-btn{background:none;border:none;cursor:pointer;color:#8b949e;font-size:12px;padding:6px 12px;border-radius:24px;display:flex;align-items:center;gap:6px;transition:all 0.12s;font-family:system-ui,sans-serif;}
+.tb-btn:hover,.tb-btn.on{background:rgba(255,255,255,0.08);color:#e6edf3;}
+.tb-btn .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+#chat-panel{position:absolute;right:0;top:0;bottom:0;width:280px;background:#161b22;border-left:1px solid rgba(255,255,255,0.08);display:none;flex-direction:column;z-index:20;}
+#chat-panel.open{display:flex;}
+#chat-header{padding:12px 14px;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;justify-content:space-between;align-items:center;flex-shrink:0;}
+#chat-header h3{font-size:13px;font-weight:500;color:#e6edf3;}
+#chat-header span{font-size:10px;color:#8b949e;}
+#chat-msgs{flex:1;overflow-y:auto;padding:10px;display:flex;flex-direction:column;gap:8px;scrollbar-width:thin;scrollbar-color:#30363d transparent;}
+.chat-msg{background:#21262d;border-radius:10px;padding:8px 10px;font-size:12px;line-height:1.5;}
+.chat-msg .who{display:flex;align-items:center;gap:6px;margin-bottom:4px;}
+.chat-msg .who .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.chat-msg .who .name{font-size:10px;font-weight:500;color:#e6edf3;}
+.chat-msg .who .badge{font-size:9px;color:#8b949e;}
+.chat-msg p{color:#adbac7;font-size:11px;}
+#chat-input-row{padding:10px;border-top:1px solid rgba(255,255,255,0.08);display:flex;gap:6px;flex-shrink:0;}
+#chat-input-row input{flex:1;background:#21262d;border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:6px 12px;color:#e6edf3;font-size:12px;outline:none;}
+#chat-input-row button{background:#21262d;border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:6px 12px;color:#e6edf3;cursor:pointer;font-size:11px;}
+
+#gossip-banner{position:absolute;top:12px;left:50%;transform:translateX(-50%);background:rgba(255,220,50,0.95);border-radius:9px;padding:5px 14px;font-size:11px;font-weight:600;color:#3a2500;display:none;white-space:nowrap;z-index:40;}
+#tooltip{position:absolute;background:#161b22;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:9px 12px;pointer-events:none;font-size:11px;display:none;z-index:50;max-width:180px;}
+</style>
+
+<div id="wrap">
+  <canvas id="c"></canvas>
+
+  <div id="gossip-banner"></div>
+  <div id="tooltip"></div>
+
+  <div id="mood-popup" class="popup" style="top:50px;left:12px;">
+    <div class="popup-title">Choose mood <button onclick="closePopup('mood-popup')">x</button></div>
+    <div class="mood-grid" id="mood-grid"></div>
+  </div>
+
+  <div id="stats-popup" class="popup" style="top:50px;left:12px;min-width:240px;">
+    <div class="popup-title">Live stats <button onclick="closePopup('stats-popup')">x</button></div>
+    <div id="stats-content"></div>
+    <div style="margin-top:10px;border-top:1px solid rgba(255,255,255,0.07);padding-top:10px;">
+      <div style="font-size:9px;letter-spacing:2px;color:#8b949e;text-transform:uppercase;margin-bottom:6px;">Breakdown</div>
+      <div id="breakdown"></div>
+    </div>
+  </div>
+
+  <div id="gossip-popup" class="popup" style="bottom:70px;left:50%;transform:translateX(-50%);min-width:340px;max-width:420px;">
+    <div class="popup-title">Pass gossip <button onclick="closePopup('gossip-popup')">x</button></div>
+    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;scrollbar-width:none;" id="gossip-bar"></div>
+    <div style="display:flex;gap:7px;margin-top:8px;">
+      <input id="cg" placeholder="Type gossip..." style="flex:1;background:#21262d;border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:6px 12px;color:#e6edf3;font-size:12px;outline:none;"/>
+      <button onclick="spreadCustom()" style="background:#21262d;border:1px solid rgba(255,255,255,0.15);border-radius:20px;padding:6px 12px;color:#e6edf3;cursor:pointer;font-size:11px;">Spread</button>
+    </div>
+  </div>
+
+  <div id="seg-popup" class="popup" style="top:50px;right:12px;min-width:250px;">
+    <div class="popup-title">Crowd mix <button onclick="closePopup('seg-popup')">x</button></div>
+    <div style="font-size:10px;color:#8b949e;margin-bottom:8px;">Population: <input type="range" id="pop-sl" min="10" max="200" step="5" value="70" style="width:100px;vertical-align:middle;"/> <span id="pop-v">70</span></div>
+    <div id="seg-mix" style="max-height:200px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#30363d transparent;"></div>
+    <button onclick="applyMix()" style="margin-top:8px;width:100%;padding:6px;border:1px solid rgba(255,255,255,0.15);border-radius:8px;cursor:pointer;font-size:11px;background:transparent;color:#8b949e;">Apply mix</button>
+  </div>
+
+  <div id="chat-panel">
+    <div id="chat-header">
+      <div><h3>People chat</h3><span id="chat-sub">Voices from the crowd</span></div>
+      <button onclick="closeChat()" style="background:none;border:none;color:#8b949e;cursor:pointer;font-size:16px;">x</button>
+    </div>
+    <div id="chat-msgs"></div>
+    <div id="chat-input-row">
+      <input id="ask-inp" placeholder="Ask the crowd anything..." onkeydown="if(event.key==='Enter')askCrowd()"/>
+      <button onclick="askCrowd()">Ask</button>
+    </div>
+  </div>
+
+  <div id="toolbar">
+    <button class="tb-btn" onclick="togglePopup('mood-popup')" id="tb-mood"><span class="dot" id="mood-dot" style="background:#e74c3c;"></span>Mood</button>
+    <button class="tb-btn" onclick="togglePopup('stats-popup')">Stats</button>
+    <button class="tb-btn" onclick="togglePopup('gossip-popup')">Gossip</button>
+    <button class="tb-btn" onclick="togglePopup('seg-popup')">Mix</button>
+    <button class="tb-btn" onclick="toggleChat()" id="tb-chat">Chat</button>
+    <button class="tb-btn" onclick="resetSim()">Reset</button>
+  </div>
+</div>
+
+<script>
+const MOODS=[
+  {id:"happy",    l:"Happy",      e:"😄",c:"#f1c40f",sp:0.35,rs:0.30},
+  {id:"angry",    l:"Angry",      e:"😡",c:"#e74c3c",sp:0.72,rs:0.10},
+  {id:"anxious",  l:"Anxious",    e:"😰",c:"#e67e22",sp:0.65,rs:0.15},
+  {id:"proud",    l:"Proud",      e:"😤",c:"#9b59b6",sp:0.28,rs:0.45},
+  {id:"sad",      l:"Sad",        e:"😢",c:"#3498db",sp:0.50,rs:0.25},
+  {id:"excited",  l:"Excited",    e:"🤩",c:"#ff6b35",sp:0.60,rs:0.20},
+  {id:"suspic",   l:"Suspicious", e:"🤨",c:"#7f8c8d",sp:0.55,rs:0.30},
+  {id:"peaceful", l:"Peaceful",   e:"😌",c:"#27ae60",sp:0.20,rs:0.55},
+  {id:"greedy",   l:"Greedy",     e:"🤑",c:"#d4ac0d",sp:0.45,rs:0.35},
+  {id:"rebel",    l:"Rebellious", e:"✊",c:"#c0392b",sp:0.78,rs:0.08},
+];
+const SEGS=[
+  {id:"politician",l:"Politician",   st:10,mn:9, pw:10,rs:8, sb:0.40,rb:-0.30,c:"#8e44ad",desc:"Spreads narratives, never changes own mood"},
+  {id:"seth",      l:"Seth Ji",      st:7, mn:10,pw:6, rs:9, sb:0.10,rb:0.35, c:"#d4ac0d",desc:"Rich, highly resistant, self-interested"},
+  {id:"auto",      l:"Auto Driver",  st:3, mn:3, pw:2, rs:2, sb:0.50,rb:-0.20,c:"#e67e22",desc:"Connected gossip vector, spreads fast"},
+  {id:"chai",      l:"Chai Wala",    st:2, mn:2, pw:1, rs:2, sb:0.60,rb:-0.25,c:"#795548",desc:"Hub of ALL gossip, amplifies everything"},
+  {id:"uncle",     l:"Society Uncle",st:5, mn:5, pw:4, rs:4, sb:0.30,rb:0.10, c:"#607d8b",desc:"Very opinionated, influences neighbours"},
+  {id:"student",   l:"Student",      st:2, mn:1, pw:1, rs:1, sb:0.40,rb:-0.35,c:"#2980b9",desc:"Highly susceptible, fast spreader"},
+  {id:"babu",      l:"Sarkari Babu", st:6, mn:5, pw:7, rs:6, sb:-0.10,rb:0.50,c:"#546e7a",desc:"Bureaucrat, slow to react, very resistant"},
+  {id:"influencer",l:"Influencer",   st:6, mn:4, pw:3, rs:3, sb:0.70,rb:-0.40,c:"#e91e63",desc:"Huge spread radius, emotionally volatile"},
+  {id:"police",    l:"Constable",    st:5, mn:4, pw:8, rs:5, sb:0.00,rb:0.40, c:"#37474f",desc:"Resistant, suppresses rebellion nearby"},
+  {id:"auntie",    l:"Gossip Auntie",st:4, mn:4, pw:3, rs:3, sb:0.65,rb:-0.10,c:"#c2185b",desc:"Supreme gossip vector, turbo spreader"},
+];
+const GOSSIPS=[
+  {id:"cricket",l:"India won!",       mood:"excited",v:0.9},
+  {id:"petrol", l:"Petrol hiked",     mood:"angry",  v:0.8},
+  {id:"wedding",l:"Big fat wedding",  mood:"happy",  v:0.6},
+  {id:"scam",   l:"Neta caught",      mood:"rebel",  v:0.85},
+  {id:"iit",    l:"Sharma ka beta IIT",mood:"proud", v:0.7},
+  {id:"flood",  l:"Flood warning",    mood:"anxious",v:0.75},
+  {id:"bribe",  l:"Inspector bribed", mood:"suspic", v:0.80},
+  {id:"factory",l:"Factory closing",  mood:"sad",    v:0.70},
+  {id:"tax",    l:"New tax!",         mood:"greedy", v:0.60},
+  {id:"mithai", l:"Free mithai!",     mood:"peaceful",v:0.50},
+];
+
+const VOICE_LINES={
+  happy:   ["Arre yaar, aaj ka din bahut acha hai!","Kuch meetha ho jaye!","Dil khush hai bhai!","Life is good, chai pi lo!"],
+  angry:   ["Yeh sab bakwaas hai!","Kab tak sahein hum?","Bahut ho gaya!","Gussa aa raha hai!"],
+  anxious: ["Kuch hoga toh nahi na?","Mujhe darr lag raha hai yaar...","Tension ho rahi hai!","Pata nahi kya hoga..."],
+  proud:   ["Hamara beta topper hai!","Hamari colony sabse best hai!","Hum kisi se kam nahi!","Apna swabhiman hai!"],
+  sad:     ["Kya karein, kismat hi aisi hai...","Mann nahi lag raha...","Bahut mushkil hai yaar...","Rone ka mann kar raha hai..."],
+  excited: ["Yaar sun yaar sun!","AREY WAAAH!","Itna maza aa raha hai!","Jab tak rahega samose mein aaloo!"],
+  suspic:  ["Kuch toh gadbad hai...","Inpe bharosa mat karo!","Yeh log sach nahi bol rahe...","Dekhte hain kya hota hai..."],
+  peaceful:["Shanti se jiyo bhai...","Sab theek ho jayega...","Chhod do yaar, mat lo tension...","Jo hoga dekha jayega..."],
+  greedy:  ["Paisa hi sab kuch hai!","Mera kya faida?","Pehle apna socho!","Opportunity milni chahiye!"],
+  rebel:   ["Yeh nahi chalega!","Hum nahi manenge!","Awaz uthao!","Badlav chahiye!"],
+};
+
+const RESPONSE_LINES={
+  happy:   (q)=>`Arre wah! ${q}? Bahut acha pooch rahe ho, aaj toh sab acha hi acha hai!`,
+  angry:   (q)=>`Kya ${q}? Matlab kya hai? Sabka time waste ho raha hai! Bahut ho gaya!`,
+  anxious: (q)=>`${q}... yeh sun ke aur darr lag raha hai. Pata nahi kya hoga aage...`,
+  proud:   (q)=>`${q} ke baare mein? Hamari colony mein sab jaante hain. Hum kisi se kam nahi!`,
+  sad:     (q)=>`${q}... kya batayen. Waise bhi kuch acha nahi chal raha aajkal.`,
+  excited: (q)=>`HAAN HAAN ${q.toUpperCase()}!! Suno suno sab log, yeh bata rahe hain!!`,
+  suspic:  (q)=>`${q}? Hmm... kuch chhupa rahe ho? Koi na koi angle toh hoga isme...`,
+  peaceful:(q)=>`${q}? Bhai, jo hoga acha hi hoga. Tension mat lo.`,
+  greedy:  (q)=>`${q} mein mera kya faida? Pehle yeh batao.`,
+  rebel:   (q)=>`${q}?! Yahi toh hum keh rahe hain! Badlao chahiye! Hum nahi manenge!`,
+};
+
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let W,H;
+function resize(){W=canvas.width=canvas.offsetWidth;H=canvas.height=canvas.offsetHeight;}
+resize();
+
+let people=[],segWeights={},selectedMood="angry",activeGossip=null,simTick=0;
+SEGS.forEach(s=>segWeights[s.id]=s.id==="chai"||s.id==="auto"||s.id==="auntie"?2:1);
+
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function pickSeg(){
+  const keys=Object.keys(segWeights),tot=keys.reduce((s,k)=>s+(segWeights[k]||0),0)||1;
+  let r=Math.random()*tot;
+  for(const k of keys){r-=(segWeights[k]||0);if(r<=0)return SEGS.find(s=>s.id===k)||SEGS[0];}
+  return SEGS[0];
+}
+function mkPerson(id){
+  const seg=pickSeg();
+  return{id,x:12+Math.random()*(W-24),y:12+Math.random()*(H-24),
+    vx:(Math.random()-0.5)*0.55,vy:(Math.random()-0.5)*0.55,
+    mood:"peaceful",seg:seg.id,intensity:0.5+Math.random()*0.5,
+    gossip:null,gTimer:0,pulse:0,name:genName(seg)};
+}
+const NAMES={politician:["Sharmaji","Guptaji","Rajneta","MLAji"],seth:["Hiralal Seth","Sureshbhai","Motiram Seth"],auto:["Ramu Bhaiya","Shyam Driver","Pappu Auto"],chai:["Chai Singh","Babloo Bhai","Champa Wali"],uncle:["Sharma Uncle","Verma Ji","Dubey Uncle"],student:["Rahul","Priya","Ankit","Neha"],babu:["Clerk Sahab","Babu Ram","Officer Ji"],influencer:["Insta Didi","Reel Bhai","Viral Priya"],police:["Constable Ji","Hawaldar Singh","Inspector Babu"],auntie:["Savitri Auntie","Kanta Ben","Pushpa Didi"]};
+function genName(seg){const arr=NAMES[seg.id]||["Unknown"];return arr[Math.floor(Math.random()*arr.length)];}
+
+function initPeople(n){
+  people=Array.from({length:n},(_,i)=>mkPerson(i));
+}
+
+function tick(){
+  simTick++;
+  people.forEach(p=>{
+    p.x+=p.vx;p.y+=p.vy;
+    if(p.x<8||p.x>W-8)p.vx*=-1;
+    if(p.y<8||p.y>H-8)p.vy*=-1;
+    p.x=clamp(p.x,5,W-5);p.y=clamp(p.y,5,H-5);
+    p.vx+=(Math.random()-0.5)*0.04;p.vy+=(Math.random()-0.5)*0.04;
+    p.vx=clamp(p.vx,-1.3,1.3);p.vy=clamp(p.vy,-1.3,1.3);
+    if(p.pulse>0)p.pulse--;
+    if(p.gTimer>0)p.gTimer--;
+  });
+  if(simTick%3===0){
+    people.forEach(p=>{
+      const seg=SEGS.find(s=>s.id===p.seg);
+      const myMood=MOODS.find(m=>m.id===p.mood);
+      const radius=40+(seg.pw/10)*22;
+      const nbrs=people.filter(o=>o!==p&&Math.hypot(o.x-p.x,o.y-p.y)<radius);
+      nbrs.forEach(nb=>{
+        const nSeg=SEGS.find(s=>s.id===nb.seg);
+        if(p.mood==="rebel"&&nb.seg==="police")return;
+        const sC=myMood.sp+seg.sb-nSeg.rb+(nSeg.mn<3?0.1:0)+(nSeg.pw<3?0.1:0);
+        if(Math.random()<clamp(sC*0.033,0,0.13)){
+          if(nb.mood!==p.mood){
+            const res=myMood.rs+nSeg.rb;
+            if(Math.random()>clamp(res,0.05,0.95)){nb.mood=p.mood;nb.pulse=18;nb.intensity=clamp(p.intensity*0.85,0.3,1);}
+          }
+          if(p.gossip&&p.gTimer>0&&!nb.gossip&&Math.random()<0.28+seg.sb){nb.gossip=p.gossip;nb.gTimer=120+Math.floor(Math.random()*80);}
+        }
+      });
+    });
+  }
+  if(simTick%22===0)updateStats();
+  if(simTick%120===0)autoChatMsg();
+}
+
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle="#0d1117";ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle="rgba(255,255,255,0.025)";ctx.lineWidth=1;
+  for(let x=0;x<W;x+=50){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=50){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  if(activeGossip){
+    people.filter(p=>p.gossip&&p.gTimer>0).forEach(p=>{
+      people.filter(o=>o!==p&&Math.hypot(o.x-p.x,o.y-p.y)<80).forEach(o=>{
+        ctx.save();ctx.strokeStyle="rgba(255,220,50,0.06)";ctx.lineWidth=1;
+        ctx.beginPath();ctx.moveTo(p.x,p.y);ctx.lineTo(o.x,o.y);ctx.stroke();ctx.restore();
+      });
+    });
+  }
+  people.forEach(p=>{
+    const mood=MOODS.find(m=>m.id===p.mood);
+    const seg=SEGS.find(s=>s.id===p.seg);
+    const r=5+(seg.pw/10)*5;
+    if(p.pulse>0){
+      const pp=1-p.pulse/18;
+      ctx.save();ctx.globalAlpha=(1-pp)*0.6;ctx.strokeStyle=mood.c;ctx.lineWidth=2;
+      ctx.beginPath();ctx.arc(p.x,p.y,r+pp*16,0,Math.PI*2);ctx.stroke();ctx.restore();
+    }
+    if(p.gossip&&p.gTimer>0){
+      ctx.save();ctx.globalAlpha=0.25+0.1*Math.sin(simTick*0.15);ctx.strokeStyle="#ffe066";ctx.lineWidth=1.5;ctx.setLineDash([3,3]);
+      ctx.beginPath();ctx.arc(p.x,p.y,r+5,0,Math.PI*2);ctx.stroke();ctx.setLineDash([]);ctx.restore();
+    }
+    ctx.save();ctx.globalAlpha=0.88+p.intensity*0.12;
+    ctx.fillStyle=mood.c;ctx.beginPath();ctx.arc(p.x,p.y,r,0,Math.PI*2);ctx.fill();
+    ctx.strokeStyle=seg.c;ctx.lineWidth=2;ctx.globalAlpha=0.55;ctx.stroke();
+    ctx.restore();
+  });
+}
+
+function updateStats(){
+  const counts={};MOODS.forEach(m=>counts[m.id]=0);
+  people.forEach(p=>counts[p.mood]++);
+  const total=people.length||1;
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const dom=MOODS.find(m=>m.id===sorted[0][0]);
+  const entropy=-Object.values(counts).filter(v=>v>0).map(v=>v/total).reduce((s,p)=>s+p*Math.log2(p),0);
+  document.getElementById('stats-content').innerHTML=`
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;"><span style="color:#8b949e;">Dominant</span><span style="color:${dom?.c};font-weight:600;">${dom?.e} ${dom?.l}</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:5px;"><span style="color:#8b949e;">Diversity</span><span>${entropy.toFixed(1)}/3.3</span></div>
+    <div style="display:flex;justify-content:space-between;font-size:12px;"><span style="color:#8b949e;">People</span><span>${people.length}</span></div>
+    ${activeGossip?`<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:5px;"><span style="color:#8b949e;">Gossip carriers</span><span style="color:#ffe066;">${people.filter(p=>p.gossip&&p.gTimer>0).length}</span></div>`:``}
+  `;
+  const bd=document.getElementById('breakdown');
+  if(bd)bd.innerHTML=sorted.filter(([,v])=>v>0).map(([id,v])=>{
+    const m=MOODS.find(x=>x.id===id);
+    const pct=Math.round(v/total*100);
+    return `<div style="margin-bottom:4px;"><div style="display:flex;justify-content:space-between;font-size:10px;margin-bottom:1px;"><span>${m.e} ${m.l}</span><span style="color:#8b949e;">${v}</span></div><div class="bar-bg"><div class="bar-fill" style="width:${pct}%;background:${m.c};"></div></div></div>`;
+  }).join('');
+}
+
+function buildMoodGrid(){
+  const g=document.getElementById('mood-grid');g.innerHTML='';
+  MOODS.forEach(m=>{
+    const b=document.createElement('button');
+    b.className='mb'+(m.id===selectedMood?' on':'');
+    b.id='mb-'+m.id;b.style.color=m.c;
+    b.innerHTML=`${m.e} ${m.l}`;
+    b.onclick=()=>{selectedMood=m.id;document.querySelectorAll('.mb').forEach(x=>x.classList.remove('on'));b.classList.add('on');document.getElementById('mood-dot').style.background=m.c;};
+    g.appendChild(b);
+  });
+}
+buildMoodGrid();
+
+function buildGossipBar(){
+  const gb=document.getElementById('gossip-bar');gb.innerHTML='';
+  GOSSIPS.forEach(g=>{
+    const m=MOODS.find(x=>x.id===g.mood);
+    const b=document.createElement('button');b.className='gp';b.id='gp-'+g.id;
+    b.innerHTML=`${m?.e||''} ${g.l}`;
+    b.onclick=()=>spreadGossip(g);
+    gb.appendChild(b);
+  });
+}
+buildGossipBar();
+
+function buildSegMix(){
+  const sm=document.getElementById('seg-mix');sm.innerHTML='';
+  SEGS.forEach(s=>{
+    const row=document.createElement('div');row.className='seg-row';
+    row.innerHTML=`<div style="width:8px;height:8px;border-radius:50%;background:${s.c};flex-shrink:0;"></div><span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#e6edf3;">${s.l}</span><input type="range" min="0" max="5" step="1" value="${segWeights[s.id]||0}" style="width:60px;" id="sw-${s.id}"/><span style="min-width:14px;font-size:10px;color:#8b949e;" id="swv-${s.id}">${segWeights[s.id]||0}</span>`;
+    sm.appendChild(row);
+    row.querySelector('input').oninput=e=>{segWeights[s.id]=Number(e.target.value);document.getElementById('swv-'+s.id).textContent=e.target.value;};
+  });
+}
+buildSegMix();
+
+document.getElementById('pop-sl').oninput=e=>document.getElementById('pop-v').textContent=e.target.value;
+
+function applyMix(){initPeople(parseInt(document.getElementById('pop-sl').value)||70);}
+function resetSim(){initPeople(parseInt(document.getElementById('pop-sl').value)||70);activeGossip=null;document.querySelectorAll('.gp').forEach(x=>x.classList.remove('on'));document.getElementById('gossip-banner').style.display='none';}
+
+function spreadGossip(g){
+  activeGossip=g;
+  document.querySelectorAll('.gp').forEach(x=>x.classList.remove('on'));
+  const btn=document.getElementById('gp-'+g.id);if(btn)btn.classList.add('on');
+  const banner=document.getElementById('gossip-banner');
+  banner.textContent=`📢 "${g.l}" spreading...`;banner.style.display='block';
+  setTimeout(()=>banner.style.display='none',3000);
+  const m=MOODS.find(x=>x.id===g.mood);
+  const seeds=[...people].sort((a,b)=>{const sa=SEGS.find(s=>s.id===a.seg),sb=SEGS.find(s=>s.id===b.seg);return(sb.sb+sb.pw/10)-(sa.sb+sa.pw/10);}).slice(0,Math.max(1,Math.floor(people.length*0.05)));
+  seeds.forEach(p=>{p.mood=g.mood;p.gossip=g;p.gTimer=200;p.pulse=18;p.intensity=1;});
+  addChatMsg(null,"SYSTEM",null,`📢 Gossip spreading: "${g.l}"`,true);
+}
+function spreadCustom(){
+  const txt=document.getElementById('cg').value.trim();if(!txt)return;
+  spreadGossip({id:'custom',l:txt,mood:selectedMood,v:0.7});
+  document.getElementById('cg').value='';
+}
+
+canvas.onclick=e=>{
+  const rect=canvas.getBoundingClientRect();
+  const sx=canvas.width/rect.width,sy=canvas.height/rect.height;
+  const cx=(e.clientX-rect.left)*sx,cy=(e.clientY-rect.top)*sy;
+  let near=null,minD=Infinity;
+  people.forEach(p=>{const d=Math.hypot(p.x-cx,p.y-cy);if(d<minD){minD=d;near=p;}});
+  if(near&&minD<28){near.mood=selectedMood;near.pulse=18;near.intensity=1;triggerPersonChat(near);}
+};
+
+canvas.onmousemove=e=>{
+  const rect=canvas.getBoundingClientRect();
+  const sx=canvas.width/rect.width,sy=canvas.height/rect.height;
+  const cx=(e.clientX-rect.left)*sx,cy=(e.clientY-rect.top)*sy;
+  let near=null,minD=Infinity;
+  people.forEach(p=>{const d=Math.hypot(p.x-cx,p.y-cy);if(d<minD){minD=d;near=p;}});
+  const tt=document.getElementById('tooltip');
+  if(near&&minD<20){
+    const seg=SEGS.find(s=>s.id===near.seg);const mood=MOODS.find(m=>m.id===near.mood);
+    tt.style.display='block';
+    const rx=e.clientX-rect.left,ry=e.clientY-rect.top;
+    tt.style.left=(rx+12)+'px';tt.style.top=(ry-8)+'px';
+    tt.innerHTML=`<div style="display:flex;align-items:center;gap:6px;margin-bottom:5px;"><div style="width:8px;height:8px;border-radius:50%;background:${seg.c};"></div><strong style="font-size:12px;color:#e6edf3;">${near.name}</strong></div><div style="color:#8b949e;font-size:10px;margin-bottom:5px;">${seg.desc}</div><div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:5px;">${[['S',seg.st],['M',seg.mn],['P',seg.pw],['R',seg.rs]].map(([k,v])=>`<span style="font-size:10px;background:#21262d;border-radius:4px;padding:2px 5px;">${k}:${v}</span>`).join('')}</div><div style="font-size:13px;">${mood.e} <span style="color:${mood.c};font-size:11px;">${mood.l}</span>${near.gossip&&near.gTimer>0?' 📢':''}</div>`;
+  }else tt.style.display='none';
+};
+canvas.onmouseleave=()=>document.getElementById('tooltip').style.display='none';
+
+function togglePopup(id){
+  const el=document.getElementById(id);
+  const wasOpen=el.classList.contains('open');
+  document.querySelectorAll('.popup').forEach(p=>p.classList.remove('open'));
+  if(!wasOpen)el.classList.add('open');
+}
+function closePopup(id){document.getElementById(id).classList.remove('open');}
+
+let chatOpen=false;
+function toggleChat(){
+  chatOpen=!chatOpen;
+  document.getElementById('chat-panel').classList.toggle('open',chatOpen);
+  document.getElementById('tb-chat').classList.toggle('on',chatOpen);
+  if(chatOpen)document.getElementById('ask-inp').focus();
+}
+function closeChat(){chatOpen=false;document.getElementById('chat-panel').classList.remove('open');document.getElementById('tb-chat').classList.remove('on');}
+
+const chatMsgs=document.getElementById('chat-msgs');
+const MAX_MSGS=60;
+
+function addChatMsg(p,overrideName,overrideSeg,overrideText,isSystem){
+  if(!document.getElementById('chat-panel').classList.contains('open'))return;
+  const mood=p?MOODS.find(m=>m.id===p.mood):null;
+  const seg=p?SEGS.find(s=>s.id===p.seg):null;
+  const name=overrideName||(p?p.name:'?');
+  const segLabel=overrideSeg||(seg?seg.l:'');
+  const text=overrideText||(p?pickLine(p.mood):'');
+  const div=document.createElement('div');
+  div.className='chat-msg';
+  if(isSystem){
+    div.style.background='rgba(255,220,50,0.1)';div.style.border='1px solid rgba(255,220,50,0.2)';
+    div.innerHTML=`<p style="color:#ffe066;font-size:11px;">${text}</p>`;
+  }else{
+    div.innerHTML=`<div class="who"><div class="dot" style="background:${mood?.c||'#888'};"></div><span class="name">${name}</span><span class="badge">${segLabel}</span></div><p>${text}</p>`;
+  }
+  chatMsgs.appendChild(div);
+  if(chatMsgs.children.length>MAX_MSGS)chatMsgs.removeChild(chatMsgs.firstChild);
+  chatMsgs.scrollTop=chatMsgs.scrollHeight;
+}
+
+function pickLine(moodId){
+  const lines=VOICE_LINES[moodId]||VOICE_LINES.peaceful;
+  return lines[Math.floor(Math.random()*lines.length)];
+}
+
+function triggerPersonChat(p){
+  if(!chatOpen)return;
+  addChatMsg(p);
+}
+
+let autoMsgTimer=0;
+function autoChatMsg(){
+  if(!chatOpen||!people.length)return;
+  const p=people[Math.floor(Math.random()*people.length)];
+  addChatMsg(p);
+}
+
+function askCrowd(){
+  const q=document.getElementById('ask-inp').value.trim();if(!q)return;
+  document.getElementById('ask-inp').value='';
+  const userDiv=document.createElement('div');
+  userDiv.className='chat-msg';
+  userDiv.style.background='rgba(255,255,255,0.04)';userDiv.style.border='1px solid rgba(255,255,255,0.08)';
+  userDiv.innerHTML=`<div class="who"><span class="name" style="color:#8b949e;">You</span></div><p style="color:#e6edf3;">${q}</p>`;
+  chatMsgs.appendChild(userDiv);chatMsgs.scrollTop=chatMsgs.scrollHeight;
+  const counts={};MOODS.forEach(m=>counts[m.id]=0);people.forEach(p=>counts[p.mood]++);
+  const total=people.length||1;
+  const sorted=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  const responders=Math.min(4,2+Math.floor(Math.random()*3));
+  const respondingPeople=[...people].sort(()=>Math.random()-0.5).slice(0,responders);
+  respondingPeople.forEach((p,i)=>{
+    setTimeout(()=>{
+      const seg=SEGS.find(s=>s.id===p.seg);
+      const mood=MOODS.find(m=>m.id===p.mood);
+      const respFn=RESPONSE_LINES[p.mood]||RESPONSE_LINES.peaceful;
+      const resp=respFn(q);
+      const div=document.createElement('div');div.className='chat-msg';
+      div.innerHTML=`<div class="who"><div class="dot" style="background:${mood.c};"></div><span class="name">${p.name}</span><span class="badge">${seg.l}</span></div><p>${resp}</p>`;
+      chatMsgs.appendChild(div);if(chatMsgs.children.length>MAX_MSGS)chatMsgs.removeChild(chatMsgs.firstChild);
+      chatMsgs.scrollTop=chatMsgs.scrollHeight;
+    },400+(i*600));
+  });
+}
+
+initPeople(70);
+function loop(){tick();draw();requestAnimationFrame(loop);}
+loop();
+</script>
